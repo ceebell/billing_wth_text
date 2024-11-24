@@ -517,6 +517,8 @@ async def search(request: Request, summary_text: str = Form(...)):
     
 
     print(f"API_HEADERS >>> {API_HEADERS}")
+    # Initialize default values
+    order_json = None  # Default value for order_json
     
     
     if not code:
