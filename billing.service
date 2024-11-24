@@ -1,0 +1,31 @@
+[Unit]
+Description=FastAPI Application
+After=network.target
+
+[Service]
+# User and group under which the service will run
+User=www-data
+Group=www-data
+
+# Set the working directory
+WorkingDirectory=/home/ubuntu/billing_wth_text
+
+# Activate the virtual environment and run the application
+ExecStart=/home/ubuntu/billing_wth_text/venv/bin/uvicorn app:main --host 0.0.0.0 --port 8000
+
+# Restart the service automatically if it fails
+Restart=always
+
+# Set environment variables if needed
+Environment="PATH=/home/ubuntu/billing_wth_text/venv/bin"
+Environment="PYTHONPATH=/home/ubuntu/billing_wth_text"
+
+[Install]
+WantedBy=multi-user.target
+
+--------------------------------------------------
+
+# sudo vi /etc/systemd/system/billing.service
+
+# sudo apt install certbot python3-certbot-nginx
+# sudo certbot --nginx -d billing.alexrental.app
