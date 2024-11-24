@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ค้นหาสินค้า - Alex Rental</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <h1 class="text-2xl font-bold text-gray-900 mb-8">ค้นหาสินค้า Alex Rental</h1>
+
+        <!-- Search Form -->
+        <form method="POST" action="/search" class="mb-8">
+            <div class="space-y-4">
+                <label for="summary_text" class="block text-sm font-medium text-gray-700">
+                    ข้อความสรุปยอด
+                </label>
+                <textarea 
+                    name="summary_text" 
+                    id="summary_text"
+                    rows="10"
+                    placeholder="วางข้อความสรุปยอดที่นี่..."
+                    required
+                    class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >{{ summary_text if summary_text else '' }}</textarea>
+                <button type="submit"
+                        class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                    ค้นหาสินค้า
+                </button>
+            </div>
+        </form>
+
+        <!-- Results -->
+        {% if result %}
+            {% if result.success %}
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="p-6">
+                        <!-- Product Details Section -->
+                        <div class="flex flex-col md:flex-row items-start gap-6">
+                            <!-- Product Image -->
+                            <div class="w-full md:w-32 h-32 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                                <img src="https://shop.alexrental.app/images/8853f673-b4d1-4a5a-848d-f55002f2254b/item/{{ result.item.mainImage }}"
+                                     alt="{{ result.item.name }}"
+                                     class="w-full h-full object-cover"
+                                >
+                            </div>
+
+                            <!-- Product Info -->
+                            <div class="flex-1 w-full">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ result.item.name }}</h3>
+                                <div class="grid grid-cols-1 gap-4">
+                                    <!-- Basic Info -->
+                                    <div class="space-y-2 text-sm text-gray-600">
+                                        <p>รหัสสินค้า: 
+                                            <span class="font-medium text-gray-900">{{ result.item.code }}</span>
+                                        </p>
+                                        <p>Product ID: 
+                                            <span class="font-mono text-xs text-gray-900">{{ result.item.productItemId }}</span>
+                                        </p>
+                                    </div>
+
+                                    <!-- Rental Dates -->
+                                    {% if result.rental_dates %}
+                                    <div class="space-y-2 text-sm border-t pt-4">
+                                        {% if result.rental_dates.pickup_date %}
+                                        <p class="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span class="text-gray-500">ส่งชุดจริง:</span>
+                                            <span class="font-medium text-gray-900">{{ result.rental_dates.pickup_date }}</span>
+                                        </p>
+                                        {% endif %}
+                                        
+                                        {% if result.rental_dates.return_date %}
+                                        <p class="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span class="text-gray-500">คืนชุด:</span>
+                                            <span class="font-medium text-gray-900">{{ result.rental_dates.return_date }}</span>
+                                        </p>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+
+                                    <!-- Pricing Table -->
+                                    <div class="border-t pt-4">
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead>
+                                                <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    <th class="pb-2">รายการ</th>
+                                                    <th class="pb-2">ราคาในระบบ</th>
+                                                    <th class="pb-2">ราคาขาย</th>
+                                                    <th class="pb-2">ส่วนลด</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200">
+                                                <!-- Rental Price -->
+                                                <tr>
+                                                    <td class="py-2">ค่าเช่า</td>
+                                                    <td class="py-2">{{ "%.2f"|format(result.item.rentalPrice) }}</td>
+                                                    <td class="py-2">{{ "%.2f"|format(result.summary_prices.rental_price) }}</td>
+                                                    <td class="py-2 {% if result.item.rentalPrice - result.summary_prices.rental_price > 0 %}text-green-600{% endif %}">
+                                                        {{ "%.2f"|format(result.item.rentalPrice - result.summary_prices.rental_price) }}
+                                                    </td>
+                                                </tr>
+                                                <!-- Bail Price -->
+                                                <tr>
+                                                    <td class="py-2">ค่าประกัน</td>
+                                                    <td class="py-2">{{ "%.2f"|format(result.item.bail) }}</td>
+                                                    <td class="py-2">{{ "%.2f"|format(result.summary_prices.bail_price) }}</td>
+                                                    <td class="py-2 {% if result.item.bail - result.summary_prices.bail_price > 0 %}text-green-600{% endif %}">
+                                                        {{ "%.2f"|format(result.item.bail - result.summary_prices.bail_price) }}
+                                                    </td>
+                                                </tr>
+                                                <!-- Total -->
+                                                <tr class="font-medium">
+                                                    <td class="pt-4">รวมทั้งหมด</td>
+                                                    <td class="pt-4">{{ "%.2f"|format(result.item.rentalPrice + result.item.bail) }}</td>
+                                                    <td class="pt-4">{{ "%.2f"|format(result.summary_prices.rental_price + result.summary_prices.bail_price) }}</td>
+                                                    <td class="pt-4 text-green-600">
+                                                        {{ "%.2f"|format((result.item.rentalPrice + result.item.bail) - (result.summary_prices.rental_price + result.summary_prices.bail_price)) }}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                         <!-- Queue Check Section -->
+                        {% if result.queue_check and result.queue_check|length > 0 %}
+                        <div class="mt-4">
+                            <!-- Status Card -->
+                            {% with queue_data = result.queue_check[0] %}  {# เข้าถึง list index แรกโดยตรง #}
+                            <div class="p-4 rounded-lg {% if queue_data.result == 1 %}bg-green-50{% else %}bg-red-50{% endif %}">
+                                <div class="flex items-start">
+                                    <!-- Icon -->
+                                    <div class="flex-shrink-0">
+                                        {% if queue_data.result == 1 %}
+                                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                            </svg>
+                                        {% else %}
+                                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                            </svg>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Content -->
+                                    <div class="ml-3 flex-1">
+                                        <!-- สถานะและคำอธิบาย -->
+                                        <div class="mb-4">
+                                            <h3 class="text-sm font-medium {% if queue_data.result == 1 %}text-green-800{% else %}text-red-800{% endif %}">
+                                                {% if queue_data.result == 1 %}
+                                                    สามารถจองได้
+                                                {% else %}
+                                                    ไม่สามารถจองได้
+                                                {% endif %}
+                                            </h3>
+                                            {% if queue_data.desc %}
+                                                <p class="mt-1 text-sm {% if queue_data.result == 1 %}text-green-600{% else %}text-red-600{% endif %}">
+                                                    {{ queue_data.desc }}
+                                                </p>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- รายละเอียด -->
+                                        <div class="space-y-3">
+                                            <!-- จำนวนในสต็อก -->
+                                            {% if queue_data.inStock is defined %}
+                                                <div class="flex items-center text-sm">
+                                                    <svg class="h-4 w-4 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                                                    </svg>
+                                                    <span class="text-gray-600">จำนวนในสต็อก:</span>
+                                                    <span class="ml-2 font-medium">{{ queue_data.inStock }} ชิ้น</span>
+                                                </div>
+                                            {% endif %}
+
+                                            <!-- วันที่จอง -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 border-t border-gray-100 pt-3">
+                                                <div class="flex items-center text-sm">
+                                                    <svg class="h-4 w-4 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                                    </svg>
+                                                    <span class="text-gray-600">วันรับชุด:</span>
+                                                    <span class="ml-2">{{ queue_data.pickupDate.split('T')[0] }}</span>
+                                                </div>
+                                                <div class="flex items-center text-sm">
+                                                    <svg class="h-4 w-4 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                                    </svg>
+                                                    <span class="text-gray-600">วันคืนชุด:</span>
+                                                    <span class="ml-2">{{ queue_data.returnDate.split('T')[0] }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endwith %}
+                        </div>
+                        {% endif %}
+
+                           <!-- Order JSON Section -->
+                        {% if result.success %}
+                        <div class="mt-8" id="orderSection">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 id="orderStatus" class="text-lg font-medium text-gray-900">ข้อมูลสำหรับสร้าง Order</h3>
+                                <button id="addOrderButton"
+                                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center gap-2"
+                                        onclick="addOrder()">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                    </svg>
+                                    Add Order
+                                </button>
+                            </div>
+                            
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                <textarea id="orderJsonEditor"
+                                        rows="20"
+                                        class="w-full p-4 font-mono text-sm bg-gray-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >{{ order_json | tojson(indent=2) }}</textarea>
+                                
+                            </div>
+                        </div>
+
+                        <script>
+                            // Inject API configuration from server
+                            const API_CONFIG = {{ api_config | tojson | safe }};
+
+                            async function addOrder() {
+                                const button = document.getElementById('addOrderButton');
+                                const statusTitle = document.getElementById('orderStatus');
+                                
+                                try {
+                                    // Hide the button
+                                    button.style.display = 'none';
+
+                                    // Show loading state
+                                    statusTitle.innerHTML = `
+                                        <div class="flex items-center gap-2 text-gray-600">
+                                            <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            กำลังดำเนินการ...
+                                        </div>
+                                    `;
+
+                                    const jsonData = JSON.parse(document.getElementById('orderJsonEditor').value);
+                                    
+                                    // Call API with configuration
+                                    const response = await fetch(API_CONFIG.urls.add_order, {
+                                        method: 'POST',
+                                        headers: API_CONFIG.headers,
+                                        body: JSON.stringify(jsonData)
+                                    });
+
+                                    if (response.ok) {
+                                        // Success state
+                                        statusTitle.innerHTML = `
+                                            <div class="flex items-center gap-2 text-green-600">
+                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                                </svg>
+                                                <span class="font-medium">เพิ่ม Order สำเร็จ</span>
+                                            </div>
+                                        `;
+                                        
+                                        // Make textarea readonly
+                                        document.getElementById('orderJsonEditor').readOnly = true;
+                                    } else {
+                                        // Error state
+                                        const errorData = await response.json();
+                                        throw new Error(errorData.message || 'API call failed');
+                                    }
+
+                                } catch (error) {
+                                    // Error state
+                                    statusTitle.innerHTML = `
+                                        <div class="flex items-center gap-2 text-red-600">
+                                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                            <span class="font-medium">เพิ่ม Order ไม่สำเร็จ: ${error.message}</span>
+                                        </div>
+                                    `;
+                                    
+                                    // Show button again in case of error
+                                    button.style.display = 'flex';
+                                    
+                                    console.error('Error adding order:', error);
+                                }
+                            }
+
+                            // Format JSON on load
+                            document.addEventListener('DOMContentLoaded', function() {
+                                const textarea = document.getElementById('orderJsonEditor');
+                                try {
+                                    const json = JSON.parse(textarea.value);
+                                    textarea.value = JSON.stringify(json, null, 2);
+                                } catch (e) {
+                                    console.error('Error formatting JSON:', e);
+                                }
+                            });
+                        </script>
+                        {% endif %}
+                            
+                                
+                </div>
+            {% else %}
+                <div class="rounded-lg bg-red-50 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800">เกิดข้อผิดพลาด</h3>
+                            <div class="mt-2 text-sm text-red-700">{{ result.message }}</div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+</body>
+</html>
