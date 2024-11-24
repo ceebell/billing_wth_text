@@ -1,21 +1,30 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"> 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ค้นหาสินค้า - Alex Rental</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50">
     <div class="max-w-4xl mx-auto px-4 py-8">
+        <form method="POST" action="/logout" class="text-right">
+            <button type="submit"
+                    class="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+                ออกจากระบบ
+            </button>
+        </form>
         <h1 class="text-2xl font-bold text-gray-900 mb-8">ค้นหาสินค้า Alex Rental</h1>
-
+        
         <!-- Search Form -->
         <form method="POST" action="/search" class="mb-8">
             <div class="space-y-4">
                 <label for="summary_text" class="block text-sm font-medium text-gray-700">
                     ข้อความสรุปยอด
                 </label>
+                <!-- Logout Button -->
+            
                 <textarea 
                     name="summary_text" 
                     id="summary_text"
@@ -29,6 +38,7 @@
                 >
                     ค้นหาสินค้า
                 </button>
+                
             </div>
         </form>
 
@@ -115,7 +125,7 @@
                                                     <td class="py-2 {% if result.item.bail - result.summary_prices.bail_price > 0 %}text-green-600{% endif %}">
                                                         {{ "%.2f"|format(result.item.bail - result.summary_prices.bail_price) }}
                                                     </td>
-                                                </tr>
+                                            </tr>
                                                 <!-- Total -->
                                                 <tr class="font-medium">
                                                     <td class="pt-4">รวมทั้งหมด</td>

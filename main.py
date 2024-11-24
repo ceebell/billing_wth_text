@@ -106,7 +106,13 @@ async def login(
             }
         )
         
-        
+@app.post("/logout")
+async def logout():
+    """จัดการการออกจากระบบ"""
+    response = RedirectResponse(url="/login", status_code=303)
+    # Clear the cookie
+    response.delete_cookie("auth_token")
+    return response      
         
 # ตัวอย่างการใช้งานใน route อื่น
 @app.get("/protected")
@@ -616,10 +622,16 @@ def extract_receiving_method(text: str) -> str:
     
     return "Flash"  # default
 
+
+def extract_remark(text: str) -> str:
+    """Extract remark from text"""
+    match = re.search(r"note\s*[:：]\s*(.*)", text, re.IGNORECASE)
+    return match.group(1).strip() if match else ""
+
 def create_order_json(text: str, result: dict) -> dict:
     """Create order JSON from summary text and API result"""
     customer_info = extract_customer_info(text)
-    
+    remark = extract_remark(text)
     # Calculate discounts
     rental_discount = result['item']['rentalPrice'] - float(result['summary_prices']['rental_price'])
     bail_discount = result['item']['bail'] - float(result['summary_prices']['bail_price'])
@@ -641,7 +653,7 @@ def create_order_json(text: str, result: dict) -> dict:
             "startDate": result['rental_dates']['pickup_date'],
             "endDate": result['rental_dates']['return_date'],
             "receivingMethod": extract_receiving_method(text),
-            "remark1": "",
+            "remark1": remark,
             "rentalPaymentMethod": "โอนเงิน",
             "bailPaymentMethod": "โอนเงิน",
             "pointDiscount": 0,
