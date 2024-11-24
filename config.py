@@ -20,4 +20,4 @@ DEFAULT_BRANCH_ID = "9592dbbe-bbb7-48d6-bc32-d2902a5b5a6a"
 
 
 # User list
-allows_users = ["bello01@gmail.com"]
+allows_users = ["bell01@gmail.com"]
