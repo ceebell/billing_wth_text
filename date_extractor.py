@@ -260,7 +260,7 @@ def extract_dates_from_text(text: str) -> Dict[str, Optional[str]]:
             return_month_num = convert_thai_month(return_month)
             return_year_ce = convert_buddhist_year(return_year)
             
-            print(f"***** Return Date: {return_day}-{return_month_num}-{return_year_ce}")
+            # print(f"***** Return Date: {return_day}-{return_month_num}-{return_year_ce}")
             
             if (return_month_num and return_year_ce and 
                 is_valid_date(return_day, return_month_num, return_year_ce)):

@@ -522,7 +522,7 @@ async def search(request: Request, summary_text: str = Form(...)):
     API_HEADERS["Authorization"] = f"Bearer {token}"
     
 
-    print(f"API_HEADERS >>> {API_HEADERS}")
+    # print(f"API_HEADERS >>> {API_HEADERS}")
     # Initialize default values
     order_json = None  # Default value for order_json
     
@@ -567,7 +567,7 @@ async def search(request: Request, summary_text: str = Form(...)):
             
             order_json = create_order_json(summary_text, result.dict())
             
-            print(f"result.queue_check >>> {queue_result}")
+            # print(f"result.queue_check >>> {queue_result}")
     
     else:
         # กรณีค้นหาไม่สำเร็จ ก็ยังใส่ข้อมูลวันที่ไว้
@@ -590,6 +590,7 @@ def extract_customer_info(text: str) -> dict:
     """Extract customer information from summary text"""
     lines = text.split('\n')
     customer_info = {}
+    deliverynote = None
     
     # Find customer name and phone line
     for line in lines:
@@ -600,13 +601,24 @@ def extract_customer_info(text: str) -> dict:
                 customer_info['customerName'] = name_part[:20]
             
             # Extract phone
-            phone = line[line.find('(')+1:line.find(')')]
-            customer_info['customerPhone'] = phone
+            # ใช้ regex ดึงเบอร์โทรศัพท์ (ตัวเลข 8-15 ตัวในวงเล็บ)
+            phone_match = re.search(r'\((\d{4,15})\)', line)
+            if phone_match:
+                customer_info['customerPhone'] = phone_match.group(1)
+            # phone = line[line.find('(')+1:line.find(')')]
+            # customer_info['customerPhone'] = phone
             
             # Get address from next line
             if len(lines) > lines.index(line) + 1:
                 customer_info['customerAddress'] = lines[lines.index(line) + 1].strip()
             break
+        
+        # ตรวจสอบข้อความที่มี '!' ต้นบรรทัด
+        if line.startswith("!"):
+            deliverynote = line[1:].strip()  # ตัด '!' ออกและลบช่องว่าง
+        # เพิ่ม deliverynote ต่อท้าย customerName หากมี
+        if deliverynote:
+            customer_info['customerName'] += f" ({deliverynote})"
     
     return customer_info
 
