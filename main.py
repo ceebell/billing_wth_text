@@ -586,41 +586,84 @@ async def search(request: Request, summary_text: str = Form(...)):
         }
     )
     
-def extract_customer_info(text: str) -> dict:
-    """Extract customer information from summary text"""
-    lines = text.split('\n')
-    customer_info = {}
-    deliverynote = None
+# def extract_customer_info(text: str) -> dict:
+#     """Extract customer information from summary text"""
+#     lines = text.split('\n')
+#     customer_info = {}
+#     deliverynote = None
     
-    # Find customer name and phone line
-    for line in lines:
-        if '(' in line and ')' in line and any(c.isdigit() for c in line):
-            # Extract name (up to 20 chars after 'K.')
-            name_part = line.split('(')[0].strip()
-            if name_part.startswith('K.'):
-                customer_info['customerName'] = name_part[:20]
+#     # Find customer name and phone line
+#     for line in lines:
+#         if '(' in line and ')' in line and any(c.isdigit() for c in line):
+#             # Extract name (up to 20 chars after 'K.')
+#             name_part = line.split('(')[0].strip()
+#             if name_part.startswith('K.'):
+#                 customer_info['customerName'] = name_part[:20]
             
-            # Extract phone
-            # ใช้ regex ดึงเบอร์โทรศัพท์ (ตัวเลข 8-15 ตัวในวงเล็บ)
-            phone_match = re.search(r'\((\d{4,15})\)', line)
-            if phone_match:
-                customer_info['customerPhone'] = phone_match.group(1)
-            # phone = line[line.find('(')+1:line.find(')')]
-            # customer_info['customerPhone'] = phone
+#             # Extract phone
+#             # ใช้ regex ดึงเบอร์โทรศัพท์ (ตัวเลข 8-15 ตัวในวงเล็บ)
+#             phone_match = re.search(r'\((\d{4,15})\)', line)
+#             if phone_match:
+#                 customer_info['customerPhone'] = phone_match.group(1)
+#             # phone = line[line.find('(')+1:line.find(')')]
+#             # customer_info['customerPhone'] = phone
             
-            # Get address from next line
-            if len(lines) > lines.index(line) + 1:
-                customer_info['customerAddress'] = lines[lines.index(line) + 1].strip()
-            break
+#             # Get address from next line
+#             if len(lines) > lines.index(line) + 1:
+#                 customer_info['customerAddress'] = lines[lines.index(line) + 1].strip()
+#             break
         
-        # ตรวจสอบข้อความที่มี '!' ต้นบรรทัด
-        if line.startswith("!"):
-            deliverynote = line[1:].strip()  # ตัด '!' ออกและลบช่องว่าง
-        # เพิ่ม deliverynote ต่อท้าย customerName หากมี
-        if deliverynote:
-            customer_info['customerName'] += f" ({deliverynote})"
+#         # ตรวจสอบข้อความที่มี '!' ต้นบรรทัด
+#         if line.startswith("!"):
+#             deliverynote = line[1:].strip()  # ตัด '!' ออกและลบช่องว่าง
+#         # เพิ่ม deliverynote ต่อท้าย customerName หากมี
+#         if deliverynote:
+#             customer_info['customerName'] += f" ({deliverynote})"
     
+#     return customer_info
+
+
+import re
+
+def extract_customer_info(text: str) -> dict:
+    """Extract customer information from summary text with new rules."""
+    lines = text.split('\n')
+    customer_info = {
+        "customerName": "",
+        "customerPhone": "",
+        "customerAddress": ""
+    }
+    
+    for line in lines:
+        # Extract customerName (up to 90 characters)
+        name_match = re.search(r"(K\.|k\.).*", line, re.IGNORECASE)
+        if name_match:
+            customer_info["customerName"] = name_match.group(0).strip()  # ดึงข้อมูลทั้งหมดที่ match
+        
+        # Extract customerPhone (up to 30 characters)
+        phone_match = re.search(r"tel\s*[:：]?\s*(.{1,30})", line, re.IGNORECASE)
+        if phone_match:
+            customer_info["customerPhone"] = phone_match.group(1).strip()
+        
+        # Extract customerAddress (up to 400 characters)
+        addr_match = re.search(r"(?:address)\s*[:：]?\s*(.{1,400})", line, re.IGNORECASE)
+        if addr_match:
+            customer_info["customerAddress"] = addr_match.group(1).strip()
+    
+    # If address not found explicitly, use the next line after phone
+    if not customer_info["customerAddress"] and customer_info["customerPhone"]:
+        for i, line in enumerate(lines):
+            if customer_info["customerPhone"] in line:
+                # Try to get the next line as address
+                if i + 1 < len(lines):
+                    customer_info["customerAddress"] = lines[i + 1].strip()
+                break
+
     return customer_info
+
+
+
+
 
 def extract_receiving_method(text: str) -> str:
     """Extract receiving method based on keywords"""
