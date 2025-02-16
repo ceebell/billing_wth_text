@@ -21,3 +21,13 @@ class UserData(BaseModel):
     token: str
     tokenExpire: str
     shopInfoId: str
+    
+class SearchResult(BaseModel):
+    success: bool
+    message: str
+    # item: Optional[ProductItem] = None           # ใช้ในกรณีมีรายการเดียว (หรือเพื่ออ้างอิงหลังจากเลือก)
+    items: Optional[List[ProductItem]] = None      # สำหรับเก็บรายการสินค้าทั้งหมด
+    summary_prices: Optional[SummaryPrices] = None
+    rental_dates: Optional[RentalDates] = None
+    queue_check: Optional[QueueCheckResult] = None
+    search_params: Optional[dict] = None           # สำหรับเก็บ mapping parameters เมื่อไม่พบ code

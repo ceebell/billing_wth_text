@@ -12,6 +12,7 @@ from config import API_HEADERS, API_URLS, DEFAULT_BRANCH_ID, allows_users
 
 from middleware import AuthMiddleware
 from jwt_utils import jwt_utils 
+import json
 
 from fastapi.responses import RedirectResponse
 
@@ -285,15 +286,22 @@ class ProductSearchRequest(BaseModel):
     showNotAvailable: bool = True
     branchId: str = "9592dbbe-bbb7-48d6-bc32-d2902a5b5a6a"
     keyword: str
+    color: Optional[str] = None
+    size: Optional[str] = None
     simpleSearch: bool = False
 
 class ProductItem(BaseModel):
     productItemId: str
     name: str
     code: str
+    size: Optional[str]
+    color: Optional[str]
     rentalPrice: float
     bail: float
     mainImage: Optional[str] = None 
+    queue_check: Optional[QueueCheckResult] = None  # เพิ่มฟิลด์นี้
+    rental_discount: Optional[float] = None  # เพิ่มส่วนลดค่าเช่า
+    bail_discount: Optional[float] = None  # เพิ่มส่วนลดค่าประกัน
 
 class SummaryPrices(BaseModel):
     rental_price: Optional[float] = None
@@ -311,10 +319,12 @@ class QueueCheckResult(BaseModel):
 class SearchResult(BaseModel):
     success: bool
     message: str
-    item: Optional[ProductItem] = None
+    # item: Optional[ProductItem] = None           # ใช้ในกรณีมีรายการเดียว (หรือเพื่ออ้างอิงหลังจากเลือก)
+    items: Optional[List[ProductItem]] = None      # สำหรับเก็บรายการสินค้าทั้งหมด
     summary_prices: Optional[SummaryPrices] = None
     rental_dates: Optional[RentalDates] = None
-    queue_check: Optional[QueueCheckResult] = None  # เพิ่มฟิลด์นี้
+    queue_check: Optional[QueueCheckResult] = None
+    search_params: Optional[dict] = None           # สำหรับเก็บ mapping parameters เมื่อไม่พบ code
     
     
 # def convert_buddhist_year(year_str: str) -> str:
@@ -420,7 +430,157 @@ def extract_prices_from_text(text: str) -> SummaryPrices:
     
     return SummaryPrices(rental_price=rental_price, bail_price=bail_price)
 
-async def search_product(code: str) -> SearchResult:
+# [V1.0]
+# async def search_product(code: str) -> SearchResult:
+#     """Search product from API."""
+#     url = "https://shop.alexrental.app/api/v2/GetProductItems"
+#     search_data = ProductSearchRequest(keyword=code)
+    
+#     try:
+#         async with httpx.AsyncClient() as client:
+#             response = await client.post(
+#                 url, 
+#                 json=search_data.dict(),
+#                 headers=API_HEADERS
+#             )
+            
+#             if response.status_code == 401:
+#                 return SearchResult(
+#                     success=False,
+#                     message="Authentication error: Invalid token",
+#                     summary_prices=SummaryPrices()
+#                 )
+            
+#             if response.status_code != 200:
+#                 return SearchResult(
+#                     success=False,
+#                     message=f"API Error: Status code {response.status_code}",
+#                     summary_prices=SummaryPrices()
+#                 )
+            
+#             data = response.json()
+            
+#             if not data.get("itemList") or len(data["itemList"]) == 0:
+#                 return SearchResult(
+#                     success=False,
+#                     message="ไม่พบข้อมูลสินค้า",
+#                     summary_prices=SummaryPrices()
+#                 )
+            
+#             item = data["itemList"][0]
+            
+#             if item["code"] != code:
+#                 return SearchResult(
+#                     success=False,
+#                     message=f"รหัสสินค้าไม่ตรงกัน (ได้รับ: {item['code']}, ต้องการ: {code})",
+#                     summary_prices=SummaryPrices()
+#                 )
+            
+#             return SearchResult(
+#                 success=True,
+#                 message="พบข้อมูลสินค้า",
+#                 item=ProductItem(
+#                     productItemId=item["productItemId"],
+#                     name=item["name"],
+#                     code=item["code"],
+#                     rentalPrice=item["rentalPrice"],
+#                     bail=item["bail"],
+#                     mainImage=item["mainImage"]
+#                 ),
+#                 summary_prices=SummaryPrices()
+#             )
+            
+#     except Exception as e:
+#         return SearchResult(
+#             success=False,
+#             message=f"Error: {str(e)}",
+#             summary_prices=SummaryPrices()
+#         )
+
+
+# [V2.0]
+async def search_product(summary_text: str) -> SearchResult:
+    """Search product from API."""
+    url = "https://shop.alexrental.app/api/v2/GetProductItems"
+    code = extract_code_from_text(summary_text)
+    
+    if not code:
+        search_params = extract_search_params(summary_text)
+        print(f"search_params >>> {search_params}")
+        search_data = ProductSearchRequest(**search_params)
+        print(f"search_data >>> {search_data}")
+    else:
+        search_data = ProductSearchRequest(keyword=code)
+        print(f"search_data >>> {search_data}")
+    
+
+    print(f"search_data >>> {search_data}")
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url, 
+                json=search_data.dict(),
+                headers=API_HEADERS
+            )
+            
+            # print(f"API_HEADERS >>> {API_HEADERS}")
+            
+            if response.status_code == 401:
+                return SearchResult(
+                    success=False,
+                    message="Authentication error: Invalid token",
+                    summary_prices=SummaryPrices()
+                )
+            
+            if response.status_code != 200:
+                return SearchResult(
+                    success=False,
+                    message=f"API Error: Status code {response.status_code}",
+                    summary_prices=SummaryPrices()
+                )
+            
+            data = response.json()
+            items_data = data.get("itemList")
+            if not items_data or len(items_data) == 0:
+                return SearchResult(
+                    success=False,
+                    message="ไม่พบข้อมูลสินค้า",
+                    summary_prices=SummaryPrices()
+                )
+            
+            product_items = []
+            for item in items_data:
+                product_item = ProductItem(
+                    productItemId=item["productItemId"],
+                    name=item["name"],
+                    code=item["code"],
+                    color=item["color"],
+                    size=item["size"],
+                    rentalPrice=item["rentalPrice"],
+                    bail=item["bail"],
+                    mainImage=item.get("mainImage")
+                )
+                product_items.append(product_item)
+                
+            # print(f"product_items >>> {product_items}")
+            
+            return SearchResult(
+                success=True,
+                message="พบข้อมูลสินค้า",
+                items=product_items,
+                summary_prices=SummaryPrices()
+            )
+            
+    except Exception as e:
+        return SearchResult(
+            success=False,
+            message=f"Error: {str(e)}",
+            summary_prices=SummaryPrices()
+        )
+
+
+async def search_product_with_code(code: str) -> SearchResult:
     """Search product from API."""
     url = "https://shop.alexrental.app/api/v2/GetProductItems"
     search_data = ProductSearchRequest(keyword=code)
@@ -449,6 +609,8 @@ async def search_product(code: str) -> SearchResult:
             
             data = response.json()
             
+            
+            
             if not data.get("itemList") or len(data["itemList"]) == 0:
                 return SearchResult(
                     success=False,
@@ -468,14 +630,16 @@ async def search_product(code: str) -> SearchResult:
             return SearchResult(
                 success=True,
                 message="พบข้อมูลสินค้า",
-                item=ProductItem(
+                items=[ProductItem(
                     productItemId=item["productItemId"],
                     name=item["name"],
                     code=item["code"],
+                    color=item["color"],
+                    size=item["size"],
                     rentalPrice=item["rentalPrice"],
                     bail=item["bail"],
                     mainImage=item["mainImage"]
-                ),
+                )],
                 summary_prices=SummaryPrices()
             )
             
@@ -486,14 +650,7 @@ async def search_product(code: str) -> SearchResult:
             summary_prices=SummaryPrices()
         )
 
-# @app.get("/")
-# async def home(request: Request):
-#     return templates.TemplateResponse(
-#         "search.html",
-#         {"request": request}
-#     )
-   
-# With AUTH 
+
 @app.get("/")
 async def home(request: Request):
     # ตรวจสอบว่า auth_token มีอยู่ใน cookie หรือไม่
@@ -508,119 +665,373 @@ async def home(request: Request):
         {"request": request}
     )
 
+
+
+
+def extract_search_params(text: str) -> dict:
+    """
+    สกัด mapping parameters จากข้อความสรุปยอด
+    โดยจะค้นหาบรรทัดที่ขึ้นต้นด้วย "ชื่อ"
+    และสกัด category จาก token แรก และ keyword จาก token ที่สอง
+    """
+    lines = text.splitlines()
+    for line in lines:
+        if line.strip().startswith("ชื่อ"):
+            content = line.strip()[len("ชื่อ"):].strip()  # ลบคำว่า "ชื่อ"
+            parts = content.split('/')
+            if len(parts) >= 3:
+                category = parts[0].strip()
+                keyword = parts[1].strip()
+                size_raw = parts[3].strip() if len(parts) >= 4 else ""
+                size_param = ""
+                if size_raw.lower().startswith("size"):
+                    size_param = size_raw[len("size"):].strip()
+                else:
+                    size_param = size_raw
+                    
+                # แปลงค่า size ให้เป็นตัวพิมพ์ใหญ่
+                if size_param in ["one size", "onesize", "ONE SIZE", "One size"]:
+                    size_param = "OS"
+                    
+                size_param = size_param.upper()
+                
+                print(f"keyword >>> {keyword}")
+                print(f"size_param >>> {size_param}")
+                
+                print(f"keyword >>> {keyword}")
+                
+                return {
+                    "filter": True,
+                    "showNotAvailable": False,
+                    "branchId": "9592dbbe-bbb7-48d6-bc32-d2902a5b5a6a",
+                    "keyword": keyword,
+                    "size": size_param,        # หากต้องการสกัดข้อมูลเพิ่มเติม สามารถปรับแก้ได้
+                    "color": "",
+                    "category": "",
+                    "texture": "",
+                    "simpleSearch": False,
+                    "pageNumber": 1,
+                    "pageSize": 15
+                }
+            break
+    return {}
+
+
+# [V2.0]
 @app.post("/search")
 async def search(request: Request, summary_text: str = Form(...)):
-    # Extract code from summary text
-    code = extract_code_from_text(summary_text)
+    
     
     token = request.cookies.get("auth_token")
     user = jwt_utils.get_user_info(token)
-    # API_HEADERS = {
-    #     "Authorization": f"Bearer {API_TOKEN}",
-    #     "Content-Type": "application/json"
-    # }
     API_HEADERS["Authorization"] = f"Bearer {token}"
     
-
-    # print(f"API_HEADERS >>> {API_HEADERS}")
-    # Initialize default values
+    selected_products = []
+    
     order_json = None  # Default value for order_json
     
+    summary_text = summary_text.replace("(blue dot dress)", "note:")
     
-    if not code:
+    # Extract code from summary text
+    code = extract_code_from_text(summary_text)
+
+    # IN CASE: PRODUCT CODE IS FOUND
+    if code:
+        print(f"CODEEEEEEEEEEEEEEEEEEEE >>> {code}")
+        result = await search_product_with_code(code)
+        print(f"result >>> {result}")
+        selected_products = result.items
+        
+        
+        print(f"selected_products >>> {selected_products}")
+        
+        # ดึงข้อมูลราคาและวันที่จาก summary_text (ถ้ามี)
+        summary_prices = extract_prices_from_text(summary_text) if summary_text else None
+        rental_dates_dict = extract_dates_from_text(summary_text) if summary_text else {}
+        rental_dates = RentalDates(**rental_dates_dict) if rental_dates_dict else None
+        
+        
+        # หากมีวันที่รับและคืน ให้ทำการเช็ค queue และคำนวณส่วนลดสำหรับทุกชิ้น
+        if rental_dates and rental_dates_dict.get('pickup_date') and rental_dates_dict.get('return_date'):
+            
+            for product in selected_products:
+                # เช็คคิวสำหรับแต่ละสินค้า
+                queue_result = await check_queue(
+                    product.productItemId,
+                    rental_dates_dict['pickup_date'],
+                    rental_dates_dict['return_date']
+                )
+                
+               
+                product.queue_check = queue_result
+                
+                # คำนวณส่วนลด สำหรับค่าเช่า และค่าประกัน
+                if summary_prices:
+                    product.rental_discount = product.rentalPrice - summary_prices.rental_price if summary_prices.rental_price is not None else 0
+                    product.bail_discount = product.bail - summary_prices.bail_price if summary_prices.bail_price is not None else 0
+
+                order_json = create_order_json(summary_text, {
+                        "item": selected_products[0].dict(),
+                        "summary_prices": summary_prices.dict(),
+                        "rental_dates": rental_dates.dict()
+                    })
+        
         return templates.TemplateResponse(
-            "search.html",
+            "view_information.html",
             {
-                "request": request,
-                "result": SearchResult(
-                    success=False,
-                    message="ไม่พบรหัสสินค้าในข้อความ",
-                    summary_prices=SummaryPrices(),
-                    rental_dates=RentalDates(),  # เพิ่ม default rental dates
-                ),
-                "summary_text": summary_text
+                    "request": request,
+                    "result": {
+                        "products": selected_products,
+                        "summary_prices": summary_prices,
+                        "rental_dates": rental_dates
+                    },
+                    "summary_text": summary_text.strip(),
+                    "order_json": order_json,         
+                    "api_config": api_config
             }
         )
-
-    # Extract all information from summary text
-    summary_prices = extract_prices_from_text(summary_text)  # ดึงข้อมูลราคา
-    rental_dates = extract_dates_from_text(summary_text)     # ดึงข้อมูลวันที่
+        
+        
     
-    # print(f"rental_dates >>> {rental_dates}")
-    # Search product from API
-    result = await search_product(code)
+    # ดึงข้อมูลราคาและวันที่จากข้อความสรุปยอด
+    summary_prices = extract_prices_from_text(summary_text)
+    rental_dates = extract_dates_from_text(summary_text)
+    
+    # ค้นหาสินค้าจาก API
+    result = await search_product(summary_text)
+    
+    
+    # print(f"result >>> {result}")
+    
+    # if result.success:
+    #     result.summary_prices = summary_prices
+    #     result.rental_dates = RentalDates(**rental_dates)
+        
+    #     # หากพบรายการสินค้าเพียงรายการเดียว ให้ทำการตรวจสอบ queue
+    #     if result.items and len(result.items) == 1:
+    #         product = result.items[0]
+    #         result.item = product  # สำหรับใช้อ้างอิงในส่วนอื่น ๆ
+    #         if rental_dates.get('pickup_date') and rental_dates.get('return_date'):
+    #             queue_result = await check_queue(
+    #                 product.productItemId,
+    #                 rental_dates['pickup_date'],
+    #                 rental_dates['return_date']
+    #             )
+    #             result.queue_check = queue_result
+    #             order_json = create_order_json(summary_text, {
+    #                 "item": product.dict(),
+    #                 "summary_prices": summary_prices.dict(),
+    #                 "rental_dates": rental_dates
+    #             })
+    #     # หากพบหลายรายการ เราแค่แสดงรายการให้เลือก (ไม่ตรวจ queue อัตโนมัติ)
+    # else:
+    #     # กรณีค้นหาไม่สำเร็จก็ยังใส่ข้อมูลวันที่ไว้
+    #     result.rental_dates = RentalDates(**rental_dates)
+    
     
     if result.success:
-        # Update result with extracted information
         result.summary_prices = summary_prices
-        result.rental_dates = RentalDates(**rental_dates)  # แปลง dict เป็น RentalDates model
-    
-        # ถ้ามีวันที่รับและคืน ให้เช็คคิว
-        if rental_dates.get('pickup_date') and rental_dates.get('return_date'):
-            # print(f"productItemId >>> {result.item.productItemId}  pickup_date >>> {rental_dates['pickup_date']} return_date >>>  {rental_dates['return_date']}")
-            queue_result = await check_queue(
-                result.item.productItemId,
-                rental_dates['pickup_date'],
-                rental_dates['return_date']
-            )
-            result.queue_check = queue_result
+        result.rental_dates = RentalDates(**rental_dates)
+        
+        # หากมีวันที่รับและคืน ให้ทำการเช็ค queue สำหรับสินค้าทุกชิ้น
+        if result.items and rental_dates.get('pickup_date') and rental_dates.get('return_date'):
+            queue_checks = []
+            for product in result.items:
+                queue_result = await check_queue(
+                    product.productItemId,
+                    rental_dates['pickup_date'],
+                    rental_dates['return_date']
+                )
+                # เพิ่ม attribute queue_check ให้กับ product (เพื่อส่งไปแสดงใน template)
+                product.queue_check = queue_result
+                queue_checks.append(queue_result)
+            # เก็บผลลัพธ์ทั้งหมดไว้ใน result.queue_check (เป็น list ของผลลัพธ์การเช็ค)
+            result.queue_check = queue_checks
             
-            order_json = create_order_json(summary_text, result.dict())
-            
-            # print(f"result.queue_check >>> {queue_result}")
-    
+            # ถ้ามีแค่สินค้าเดียว ให้กำหนด result.item และสร้าง order_json ได้ (ตามที่เคยทำ)
+            # if len(result.items) == 1:
+            #     result.item = result.items[0]
+            #     order_json = create_order_json(summary_text, {
+            #         "item": result.items[0].dict(),
+            #         "summary_prices": summary_prices.dict(),
+            #         "rental_dates": rental_dates
+            #     })
     else:
         # กรณีค้นหาไม่สำเร็จ ก็ยังใส่ข้อมูลวันที่ไว้
         result.rental_dates = RentalDates(**rental_dates)
-        
     
+        
     return templates.TemplateResponse(
         "search.html",
         {
             "request": request,
             "result": result,
-            "summary_text": summary_text,
+            "summary_text": summary_text.strip(),
             "order_json": order_json,
             "api_config": api_config
-            
         }
     )
     
-# def extract_customer_info(text: str) -> dict:
-#     """Extract customer information from summary text"""
-#     lines = text.split('\n')
-#     customer_info = {}
-#     deliverynote = None
+ 
+async def get_product_detail(request: Request, productCode: str) -> ProductItem:
+    """
+    Fetch detailed product information from the API using product_id.
+    Adjust the method and payload according to the API documentation.
+    """
+    # Check if the correct URL is provided
+    print(f"productCode >>> {productCode}")
     
-#     # Find customer name and phone line
-#     for line in lines:
-#         if '(' in line and ')' in line and any(c.isdigit() for c in line):
-#             # Extract name (up to 20 chars after 'K.')
-#             name_part = line.split('(')[0].strip()
-#             if name_part.startswith('K.'):
-#                 customer_info['customerName'] = name_part[:20]
+    url = "https://shop.alexrental.app/api/v2/GetProductItems"
+    
+    params = ProductSearchRequest(keyword=productCode) 
+    
+    
+
+
+    # print(f"params >>> {params}  type >>> {type(params)}")
+
+    token = request.cookies.get("auth_token")
+    API_HEADERS["Authorization"] = f"Bearer {token}"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Try using GET instead of POST if that's required
+            response = await client.post(url, json=params.dict(), headers=API_HEADERS)
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail=f"Error fetching product detail: {response.status_code}")
+            data = response.json()
             
-#             # Extract phone
-#             # ใช้ regex ดึงเบอร์โทรศัพท์ (ตัวเลข 8-15 ตัวในวงเล็บ)
-#             phone_match = re.search(r'\((\d{4,15})\)', line)
-#             if phone_match:
-#                 customer_info['customerPhone'] = phone_match.group(1)
-#             # phone = line[line.find('(')+1:line.find(')')]
-#             # customer_info['customerPhone'] = phone
             
-#             # Get address from next line
-#             if len(lines) > lines.index(line) + 1:
-#                 customer_info['customerAddress'] = lines[lines.index(line) + 1].strip()
-#             break
+            
+            dataItem = data["itemList"][0]
+            
+            product_detail = ProductItem(
+                productItemId=dataItem["productItemId"],
+                name=dataItem["name"],
+                code=dataItem["code"],
+                size=dataItem.get("size"),
+                color=dataItem.get("color"),
+                rentalPrice=dataItem["rentalPrice"],
+                bail=dataItem["bail"],
+                mainImage=dataItem.get("mainImage")
+            )
+            
+            print(f"data of RESPONSE  product_detail >>> {product_detail}")
+            
+            return product_detail
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching product detail: {str(e)}")
+
+
+# [V2.0]
+@app.post("/view-information")
+async def view_information(
+        request: Request, 
+        productCodes: List[str] = Form(...), 
+        summary_text: str = Form(...)
+    ):
+    """
+    แสดงหน้ารายละเอียดสินค้าที่เลือกไว้
+    productIds: เป็น comma-separated string ของ productItemId ที่เลือกไว้
+    summary_text: สามารถส่งข้อมูลสรุปยอดเพื่อดึงข้อมูลราคา/วันที่ (ถ้ามี)
+    """
+    
+    order_json = None  # Default value for order_json
+    summary_text = summary_text.replace("(blue dot dress)", "note:")
+    # print(f"summary_text >>> {summary_text}")
+    
+    # ทำการแปลง List[str] เป็น comma-separated string หรือวนลูปตามที่ต้องการ
+    # ตัวอย่างเช่น:
+    # print("Product Codes:", productCodes)
+    # ดึงรายละเอียดของสินค้าตามที่เลือกไว้
+    selected_products = []
+    for pcode in productCodes:
+        product_detail = await get_product_detail(request, pcode)
+        selected_products.append(product_detail)
         
-#         # ตรวจสอบข้อความที่มี '!' ต้นบรรทัด
-#         if line.startswith("!"):
-#             deliverynote = line[1:].strip()  # ตัด '!' ออกและลบช่องว่าง
-#         # เพิ่ม deliverynote ต่อท้าย customerName หากมี
-#         if deliverynote:
-#             customer_info['customerName'] += f" ({deliverynote})"
+        
     
-#     return customer_info
+    # ดึงข้อมูลราคาและวันที่จาก summary_text (ถ้ามี)
+    summary_prices = extract_prices_from_text(summary_text) if summary_text else None
+    rental_dates_dict = extract_dates_from_text(summary_text) if summary_text else {}
+    rental_dates = RentalDates(**rental_dates_dict) if rental_dates_dict else None
+
+    # หากมีวันที่รับและคืน ให้ทำการเช็ค queue และคำนวณส่วนลดสำหรับทุกชิ้น
+    if rental_dates and rental_dates_dict.get('pickup_date') and rental_dates_dict.get('return_date'):
+        
+        
+        for product in selected_products:
+            # เช็คคิวสำหรับแต่ละสินค้า
+            queue_result = await check_queue(
+                product.productItemId,
+                rental_dates_dict['pickup_date'],
+                rental_dates_dict['return_date']
+            )
+            
+            # print(f"VIEW::: CEHCK QUQUQUQUQU RESP >>> {queue_result}")
+            
+            # เพิ่ม attribute queue_check ให้กับ product
+            product.queue_check = queue_result
+            
+            # คำนวณส่วนลด สำหรับค่าเช่า และค่าประกัน
+            if summary_prices:
+                product.rental_discount = product.rentalPrice - summary_prices.rental_price if summary_prices.rental_price is not None else 0
+                product.bail_discount = product.bail - summary_prices.bail_price if summary_prices.bail_price is not None else 0
+
+            order_json = create_order_json(summary_text, {
+                    "item": selected_products[0].dict(),
+                    "summary_prices": summary_prices.dict(),
+                    "rental_dates": rental_dates.dict()
+                })
+    
+    # print(f"order_json >>> {order_json}")
+    # print(f"summary_prices >>> {summary_prices}")
+    # print(f"rental_dates >>> {rental_dates}")
+    
+    
+    
+    
+    
+    
+    return templates.TemplateResponse(
+        "view_information.html",
+        {
+                "request": request,
+                "result": {
+                    "products": selected_products,
+                    "summary_prices": summary_prices,
+                    "rental_dates": rental_dates
+                },
+                "summary_text": summary_text.strip(),
+                "order_json": order_json,         
+                "api_config": api_config
+        }
+    )
+   
+
+# [v1.0]
+# @app.post("/view-information")
+# async def view_information(
+#     request: Request, 
+#     summary_text: str = Form(...),
+#     productCodes: List[str] = Form(...)
+# ):
+#     print("<<<<<<<<<<<<<<<< U R IN /view-information/ >>>>>>>>>>>>>>>>")
+#     product_details = []
+#     for productCode in productCodes:
+#         product_detail = await get_product_detail(request, productCode)
+#         product_details.append(product_detail)
+#         print(f"product_detail >>> {product_detail}")
+    
+#     return templates.TemplateResponse(
+#         "view_information.html",
+#         {
+#             "request": request,
+#             "result": {"items": product_details},
+#             "summary_text": summary_text
+#         }
+#     ) 
+    
 
 
 import re
@@ -687,9 +1098,29 @@ def create_order_json(text: str, result: dict) -> dict:
     """Create order JSON from summary text and API result"""
     customer_info = extract_customer_info(text)
     remark = extract_remark(text)
+    
+    
     # Calculate discounts
     rental_discount = result['item']['rentalPrice'] - float(result['summary_prices']['rental_price'])
     bail_discount = result['item']['bail'] - float(result['summary_prices']['bail_price'])
+    
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    
+    # print(f"customer_info.get('customerName', '') >>> {customer_info.get('customerName', '')}")
+    # print(f"customer_info.get('customerAddress', '') >>> {customer_info.get('customerAddress', '')}")
+    # print(f"customer_info.get('customerPhone', '') >>> {customer_info.get('customerPhone', '')}")
+    
+    # print(f"result['rental_dates']['pickup_date'] >>> {result['rental_dates']['pickup_date']}")
+    # print(f"result['rental_dates']['pickup_date'] >>> {result['rental_dates']['pickup_date']}")
+    
+    # print(f"result['item']['productItemId'] >>> {result['item']['productItemId']}")
+    
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    
     
     # Create order JSON
     order_json = {
@@ -725,5 +1156,13 @@ def create_order_json(text: str, result: dict) -> dict:
             }
         ]
     }
+    
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(order_json)
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     
     return order_json
